@@ -1,0 +1,61 @@
+<form #taskForm="ngForm" class="task-form" (ngSubmit)="onSubmit(taskForm)" novalidate>
+  <h2>Add a task</h2>
+
+  <div class="field">
+    <label for="title">Title</label>
+    <input
+      id="title"
+      name="title"
+      type="text"
+      required
+      maxlength="200"
+      [(ngModel)]="model.title"
+      placeholder="What needs to be done?"
+      autocomplete="off"
+    />
+  </div>
+
+  <div class="field">
+    <label for="description">Description</label>
+    <textarea
+      id="description"
+      name="description"
+      rows="2"
+      maxlength="2000"
+      [(ngModel)]="model.description"
+      placeholder="Optional details"
+    ></textarea>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="startTime">Start</label>
+      <input
+        id="startTime"
+        name="startTime"
+        type="datetime-local"
+        required
+        [(ngModel)]="model.startTime"
+      />
+    </div>
+
+    <div class="field">
+      <label for="endTime">Deadline</label>
+      <input
+        id="endTime"
+        name="endTime"
+        type="datetime-local"
+        required
+        [(ngModel)]="model.endTime"
+      />
+    </div>
+  </div>
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
+  <button type="submit" [disabled]="submitting() || taskForm.invalid">
+    {{ submitting() ? 'Adding…' : 'Add task' }}
+  </button>
+</form>

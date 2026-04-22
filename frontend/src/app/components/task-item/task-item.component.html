@@ -1,0 +1,36 @@
+<li class="task-item" [attr.data-status]="status()">
+  <div class="task-main">
+    <label class="checkbox">
+      <input
+        type="checkbox"
+        [checked]="task.isCompleted"
+        (change)="onToggle()"
+        [attr.aria-label]="'Toggle complete for ' + task.title"
+      />
+    </label>
+
+    <div class="task-body">
+      <div class="task-title-row">
+        <h3 [class.completed]="task.isCompleted">{{ task.title }}</h3>
+        <span class="badge" [attr.data-status]="status()">{{ status() }}</span>
+      </div>
+
+      @if (task.description) {
+        <p class="task-description">{{ task.description }}</p>
+      }
+
+      <div class="task-meta">
+        <span>
+          <strong>Start:</strong> {{ task.startTime | date: 'MMM d, y, h:mm a' }}
+        </span>
+        <span>
+          <strong>Deadline:</strong> {{ task.endTime | date: 'MMM d, y, h:mm a' }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <button class="delete" type="button" (click)="onDelete()" aria-label="Delete task">
+    Delete
+  </button>
+</li>

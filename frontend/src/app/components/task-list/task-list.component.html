@@ -1,0 +1,45 @@
+<section class="task-list-container">
+  <header class="page-header">
+    <h1>Timed Tasks</h1>
+    <p class="subtitle">Track what to do — and when it's due.</p>
+  </header>
+
+  <app-task-form (create)="onCreate($event)"></app-task-form>
+
+  <div class="filters" role="tablist">
+    @for (f of filters; track f) {
+      <button
+        role="tab"
+        type="button"
+        class="filter"
+        [class.active]="filter() === f"
+        [attr.aria-selected]="filter() === f"
+        (click)="setFilter(f)"
+      >
+        {{ f }}
+        <span class="count">{{ counts()[f] }}</span>
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <p class="state">Loading tasks…</p>
+  } @else if (loadError()) {
+    <p class="state error">
+      {{ loadError() }}
+      <button class="retry" type="button" (click)="loadTasks()">Retry</button>
+    </p>
+  } @else if (visibleTasks().length === 0) {
+    <p class="state empty">No tasks to show. Add one above to get started.</p>
+  } @else {
+    <ul class="tasks">
+      @for (task of visibleTasks(); track task.id) {
+        <app-task-item
+          [task]="task"
+          (toggleComplete)="onToggleComplete($event)"
+          (delete)="onDelete($event)"
+        ></app-task-item>
+      }
+    </ul>
+  }
+</section>

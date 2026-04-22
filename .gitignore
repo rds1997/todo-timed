@@ -1,0 +1,25 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Angular build
+frontend/dist/
+frontend/.angular/
+frontend/coverage/
+
+# .NET
+backend/bin/
+backend/obj/
+backend/out/
+*.user
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
