@@ -1,0 +1,128 @@
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  border-left: 4px solid #cbd5e1;
+}
+
+.task-item[data-status='Overdue'] {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.task-item[data-status='Completed'] {
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+  opacity: 0.85;
+}
+
+.task-item[data-status='Pending'] {
+  border-left-color: #2563eb;
+}
+
+.task-main {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.task-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-title-row h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.task-title-row h3.completed {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge[data-status='Overdue'] {
+  background: #dc2626;
+  color: #fff;
+}
+
+.badge[data-status='Completed'] {
+  background: #16a34a;
+  color: #fff;
+}
+
+.badge[data-status='Pending'] {
+  background: #2563eb;
+  color: #fff;
+}
+
+.task-description {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.task-meta strong {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.delete {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #b91c1c;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.delete:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
