@@ -1,4 +1,6 @@
 export const environment = {
   production: true,
-  apiBaseUrl: '',
+  // Replaced at build time by Render (see render.yaml) or by
+  // `scripts/set-api-base-url.sh` for local production builds.
+  apiBaseUrl: '__API_BASE_URL__',
 };
