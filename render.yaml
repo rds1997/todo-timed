@@ -16,7 +16,6 @@ services:
   - type: web
     name: todo-timed-web
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: |
       sed -i "s|__API_BASE_URL__|https://${API_BASE_HOST}|g" src/environments/environment.prod.ts && \
