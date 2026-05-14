@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     service_name: str = "sdlc-copilot-ai"
     log_level: str = "INFO"
 
+    # Chat conversation memory: maximum number of prior messages (user + assistant)
+    # included in the prompt for /api/v1/chat. Keeps prompt size bounded as the
+    # conversation grows. The .NET backend persists full history; this is just the
+    # window the LLM sees per request.
+    chat_history_window: int = 20
+
     # Fallback mode: when true (or no API key) returns deterministic mock data.
     force_mock: bool = False
 

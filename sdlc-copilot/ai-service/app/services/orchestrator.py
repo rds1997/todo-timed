@@ -107,20 +107,29 @@ class Orchestrator:
         )
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
+        # Cap the number of prior turns the model sees so prompt size stays bounded
+        # even when a requirement has dozens of chat messages persisted in Postgres.
+        window = max(0, self._settings.chat_history_window)
+        bounded_history = req.history[-window:] if window else []
+
         if not self._openai.enabled:
-            return mock_provider.mock_chat(req)
+            return mock_provider.mock_chat(req, history=bounded_history)
         try:
             user_msg = CHAT_USER_TEMPLATE.format(
                 title=req.title, text=req.text[:6000], message=req.message
             )
             history_payload: List[Dict[str, str]] = [
-                {"role": m.role, "content": m.content} for m in req.history[-10:]
+                {"role": m.role, "content": m.content} for m in bounded_history
             ]
+            logger.info(
+                "chat: %d prior turn(s) sent as context (window=%d, total_provided=%d)",
+                len(history_payload), window, len(req.history),
+            )
             reply = await self._openai.chat(CHAT_SYSTEM, history_payload, user_msg)
             return ChatResponse(reply=reply, mode="openai")
         except Exception:
             logger.exception("OpenAI chat failed, falling back to mock provider.")
-            return mock_provider.mock_chat(req)
+            return mock_provider.mock_chat(req, history=bounded_history)
 
     # ---- per-artifact runners ---------------------------------------------
 
