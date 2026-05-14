@@ -48,6 +48,32 @@ Open the UI at <http://localhost:4200>. Swagger lives at <http://localhost:4200/
 
 **No OpenAI key?** Leave `OPENAI_API_KEY` blank — the AI service returns deterministic mock data so the whole platform demos end-to-end without external dependencies.
 
+### Live OpenAI mode (recommended for the real demo)
+
+Set `OPENAI_API_KEY` in `.env` and restart `docker compose`. The AI service then routes every artifact through `gpt-4o-mini` (the default). Verify with:
+
+```bash
+curl http://localhost:8001/health
+# {"status":"ok","service":"sdlc-copilot-ai","mode":"openai","model":"gpt-4o-mini"}
+```
+
+All LLM-related knobs are environment-variable driven (see [`.env.example`](.env.example)):
+
+| Variable                       | Default       | Purpose                                                                 |
+|--------------------------------|---------------|-------------------------------------------------------------------------|
+| `OPENAI_API_KEY`               | _empty_       | Required to enable live mode. When empty, the mock provider runs.       |
+| `OPENAI_MODEL`                 | `gpt-4o-mini` | Any chat model that supports JSON-mode responses.                       |
+| `OPENAI_BASE_URL`              | _empty_       | Set for Azure OpenAI or a local LLM proxy.                              |
+| `OPENAI_ORGANIZATION`          | _empty_       | Optional OpenAI org id.                                                 |
+| `OPENAI_TEMPERATURE`           | `0.2`         | Lower = more deterministic artifacts.                                   |
+| `OPENAI_MAX_OUTPUT_TOKENS`     | `4000`        | Per-call output ceiling.                                                |
+| `OPENAI_TIMEOUT_SECONDS`       | `60`          | Per-request timeout passed to `AsyncOpenAI`.                            |
+| `OPENAI_MAX_RETRIES`           | `2`           | Transport-level retries on `429` / `5xx` performed by the OpenAI SDK.   |
+| `OPENAI_SCHEMA_RETRY_ATTEMPTS` | `1`           | Extra attempts when LLM JSON fails Pydantic validation (per artifact).  |
+| `FORCE_MOCK`                   | `false`       | Force mock mode even when a key is set (handy for offline demos / CI).  |
+
+The orchestrator is **per-artifact resilient**: each of `summary`, `epics+user_stories`, `ambiguities`, `tasks`, `test_cases`, and `estimation` is generated independently. If a single prompt fails JSON validation after retries (or the OpenAI SDK raises after its own retries), only that artifact falls back to mock data — the rest of the analysis remains live. `AnalyzeResponse.mode` reports `"openai"` if any live artifact succeeded, `"mock"` otherwise.
+
 ### Demo path
 1. On the dashboard, paste the contents of [`db/seed-sample-requirement.txt`](db/seed-sample-requirement.txt) into "Paste text" and click **Ingest**.
 2. On the resulting page, click **Analyze with AI**. The summary, stories, tasks, tests, ambiguities, and estimation populate.
@@ -191,7 +217,8 @@ Each service has its own `Dockerfile` and a `PORT` env-var; the same Docker imag
 For Azure OpenAI, set:
 ```
 OPENAI_API_KEY=<aoai-key>
-OPENAI_BASE_URL=https://<your-resource>.openai.azure.com
+OPENAI_BASE_URL=https://<your-resource>.openai.azure.com/openai/deployments/<deployment>
+OPENAI_MODEL=<deployment-name>            # alias for your gpt-4o-mini deployment
 OPENAI_MODEL=<your-deployment-name>
 ```
 

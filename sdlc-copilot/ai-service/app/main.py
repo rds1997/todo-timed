@@ -28,12 +28,24 @@ app.add_middleware(
 app.include_router(analyze_router.router)
 
 
+def _current_mode() -> str:
+    return "openai" if (settings.openai_api_key and not settings.force_mock) else "mock"
+
+
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:
+    """Liveness + current mode + which model is configured.
+
+    ``mode`` is ``"openai"`` when ``OPENAI_API_KEY`` is set and ``FORCE_MOCK`` is false,
+    otherwise ``"mock"``. ``model`` is reported so operators can confirm the deployed
+    configuration without poking the LLM.
+    """
+    mode = _current_mode()
     return {
         "status": "ok",
         "service": settings.service_name,
-        "mode": "openai" if (settings.openai_api_key and not settings.force_mock) else "mock",
+        "mode": mode,
+        "model": settings.openai_model if mode == "openai" else "mock",
     }
 
 
