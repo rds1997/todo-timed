@@ -1,0 +1,103 @@
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+// Brand palette
+$primary-palette: mat.define-palette(mat.$indigo-palette, 600);
+$accent-palette: mat.define-palette(mat.$pink-palette, A200, A100, A400);
+$warn-palette: mat.define-palette(mat.$red-palette);
+
+$theme: mat.define-light-theme((
+  color: (
+    primary: $primary-palette,
+    accent: $accent-palette,
+    warn: $warn-palette,
+  ),
+  typography: mat.define-typography-config(
+    $font-family: 'Inter, "Helvetica Neue", sans-serif',
+  ),
+  density: 0,
+));
+
+@include mat.all-component-themes($theme);
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #f4f5f9;
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.spacer { flex: 1 1 auto; }
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  color: rgba(0, 0, 0, 0.6);
+  margin: -16px 0 24px 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.severity-low    { color: #2e7d32; }
+.severity-medium { color: #ed6c02; }
+.severity-high   { color: #d32f2f; }
+.severity-critical { color: #7b1fa2; font-weight: 600; }
+
+.chip-positive { background: #e8f5e9; color: #1b5e20; }
+.chip-negative { background: #ffebee; color: #b71c1c; }
+.chip-edge     { background: #fff3e0; color: #e65100; }
+
+.layer-backend  { background: #e3f2fd; color: #0d47a1; }
+.layer-frontend { background: #f3e5f5; color: #4a148c; }
+.layer-infra    { background: #fff8e1; color: #ff6f00; }
+.layer-qa       { background: #e8f5e9; color: #1b5e20; }
+.layer-data     { background: #eceff1; color: #263238; }
+
+.kpi-card {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  .kpi-label { font-size: 0.8rem; color: rgba(0, 0, 0, 0.6); text-transform: uppercase; letter-spacing: 0.06em; }
+  .kpi-value { font-size: 1.8rem; font-weight: 600; }
+  .kpi-sub   { font-size: 0.8rem; color: rgba(0, 0, 0, 0.5); }
+}
+
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.section {
+  margin-top: 32px;
+  h2 {
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.15rem;
+  }
+}
+
+.mat-mdc-card { border-radius: 14px !important; }
+
+.scroll-x { overflow-x: auto; }
+
+.muted { color: rgba(0,0,0,0.55); }

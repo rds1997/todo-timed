@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sdlc-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sdlc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sdlc}
+      POSTGRES_DB: ${POSTGRES_DB:-sdlc_copilot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sdlc} -d ${POSTGRES_DB:-sdlc_copilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: sdlc-ai
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      LOG_LEVEL: INFO
+      FORCE_MOCK: ${FORCE_MOCK:-false}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    container_name: sdlc-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-sdlc_copilot};Username=${POSTGRES_USER:-sdlc};Password=${POSTGRES_PASSWORD:-sdlc}"
+      AiService__BaseUrl: http://ai-service:8001
+      Cors__AllowedOrigins: "http://localhost:4200,http://localhost"
+      EnableSwagger: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: sdlc-frontend
+    depends_on:
+      - api
+    ports:
+      - "4200:80"
+
+volumes:
+  pgdata:
