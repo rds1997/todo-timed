@@ -99,4 +99,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    mode: Literal["openai", "mock"] = "mock"
+    mode: Literal["openai", "mock", "error"] = "mock"
+    # When ``mode == "error"`` the live OpenAI path was attempted (because a key
+    # is configured and ``FORCE_MOCK`` is false) but failed. The actual error
+    # message is surfaced so operators can debug without spelunking container logs.
+    error: Optional[str] = None

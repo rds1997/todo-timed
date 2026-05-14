@@ -30,7 +30,7 @@
 3. **Test case generation** — positive, negative, and edge cases per story.
 4. **Ambiguity detection** — flags unclear / incomplete / conflicting / untestable statements with concrete suggestions.
 5. **Interactive dashboard** — KPI cards, sortable tables, expandable artifact panels, all editable.
-6. **Conversational assistant** — chat with a model that has the full requirement in context; history is persisted.
+6. **Conversational assistant** — chat with a model that has the full requirement in context. The conversation has **memory**: every turn is persisted in Postgres and the most recent `CHAT_HISTORY_WINDOW` turns are replayed to the LLM as authoritative context, so follow-up questions like *"and what about the second one?"* resolve correctly. Works in both live (OpenAI) and mock modes.
 7. **Effort estimation** — total story points, total hours, and per-layer breakdown (backend, frontend, infra, QA, data).
 8. **Export** — Markdown and JSON exports of the full structured artifact set.
 
@@ -70,6 +70,7 @@ All LLM-related knobs are environment-variable driven (see [`.env.example`](.env
 | `OPENAI_TIMEOUT_SECONDS`       | `60`          | Per-request timeout passed to `AsyncOpenAI`.                            |
 | `OPENAI_MAX_RETRIES`           | `2`           | Transport-level retries on `429` / `5xx` performed by the OpenAI SDK.   |
 | `OPENAI_SCHEMA_RETRY_ATTEMPTS` | `1`           | Extra attempts when LLM JSON fails Pydantic validation (per artifact).  |
+| `CHAT_HISTORY_WINDOW`          | `20`          | Max prior chat turns forwarded to the LLM per `/api/v1/chat` request.   |
 | `FORCE_MOCK`                   | `false`       | Force mock mode even when a key is set (handy for offline demos / CI).  |
 
 The orchestrator is **per-artifact resilient**: each of `summary`, `epics+user_stories`, `ambiguities`, `tasks`, `test_cases`, and `estimation` is generated independently. If a single prompt fails JSON validation after retries (or the OpenAI SDK raises after its own retries), only that artifact falls back to mock data — the rest of the analysis remains live. `AnalyzeResponse.mode` reports `"openai"` if any live artifact succeeded, `"mock"` otherwise.
@@ -219,7 +220,6 @@ For Azure OpenAI, set:
 OPENAI_API_KEY=<aoai-key>
 OPENAI_BASE_URL=https://<your-resource>.openai.azure.com/openai/deployments/<deployment>
 OPENAI_MODEL=<deployment-name>            # alias for your gpt-4o-mini deployment
-OPENAI_MODEL=<your-deployment-name>
 ```
 
 ---

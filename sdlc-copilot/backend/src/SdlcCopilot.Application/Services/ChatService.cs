@@ -10,6 +10,14 @@ namespace SdlcCopilot.Application.Services;
 
 public class ChatService : IChatService
 {
+    /// <summary>
+    /// Maximum number of prior chat turns (user + assistant messages) the backend
+    /// will ship to the AI service per request. Keeps the prompt size bounded as
+    /// the conversation grows. Full history is still persisted in Postgres and is
+    /// available to the UI via the history endpoint.
+    /// </summary>
+    public const int DefaultHistoryWindow = 20;
+
     private readonly IRequirementRepository _repo;
     private readonly IAiService _ai;
     private readonly ILogger<ChatService> _logger;
@@ -40,10 +48,20 @@ public class ChatService : IChatService
         var entity = await _repo.GetWithChildrenAsync(requirementId, tracking: true, cancellationToken);
         if (entity is null) return Result<ChatTurnResponse>.NotFound();
 
-        var history = entity.ChatMessages
-            .OrderBy(m => m.CreatedAt)
+        // Build the conversation window the model will see for this turn.
+        // Ordered oldest-first (OpenAI expects chronological context) and capped
+        // to the most recent DefaultHistoryWindow messages so prompt size stays bounded.
+        var orderedHistory = entity.ChatMessages.OrderBy(m => m.CreatedAt).ToList();
+        var recentHistory = orderedHistory.Count > DefaultHistoryWindow
+            ? orderedHistory.GetRange(orderedHistory.Count - DefaultHistoryWindow, DefaultHistoryWindow)
+            : orderedHistory;
+        var history = recentHistory
             .Select(m => new AiChatMessage(m.Role.ToString().ToLowerInvariant(), m.Content))
             .ToList();
+
+        _logger.LogInformation(
+            "Chat turn for requirement {RequirementId}: shipping {HistoryCount}/{TotalCount} prior message(s) as context",
+            requirementId, history.Count, orderedHistory.Count);
 
         var userMsg = new ChatMessage
         {
@@ -62,6 +80,22 @@ public class ChatService : IChatService
         {
             _logger.LogError(ex, "AI chat failed for requirement {Id}", requirementId);
             return Result<ChatTurnResponse>.Failure("AI chat failed: " + ex.Message, 502);
+        }
+
+        // Surface the upstream chat mode so operators can spot silent fallbacks.
+        // When the ai-service has a key but the live OpenAI round-trip failed it
+        // returns mode="error" with the actual error in aiResp.Error — log it loudly.
+        if (string.Equals(aiResp.Mode, "error", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(
+                "AI chat returned mode=error for requirement {Id}: {Error}",
+                requirementId, aiResp.Error);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "AI chat returned mode={Mode} for requirement {Id} (reply_len={Len})",
+                aiResp.Mode, requirementId, aiResp.Reply.Length);
         }
 
         var assistantMsg = new ChatMessage

@@ -19,6 +19,10 @@ services:
   ai-service:
     build:
       context: ./ai-service
+      args:
+        # Override on each build to verify a fresh image is running:
+        #   BUILD_ID=$(git rev-parse --short HEAD)-$(date +%s) docker compose build ai-service
+        BUILD_ID: ${BUILD_ID:-local}
     container_name: sdlc-ai
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -30,6 +34,7 @@ services:
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
       OPENAI_MAX_RETRIES: ${OPENAI_MAX_RETRIES:-2}
       OPENAI_SCHEMA_RETRY_ATTEMPTS: ${OPENAI_SCHEMA_RETRY_ATTEMPTS:-1}
+      CHAT_HISTORY_WINDOW: ${CHAT_HISTORY_WINDOW:-20}
       LOG_LEVEL: INFO
       FORCE_MOCK: ${FORCE_MOCK:-false}
     ports:

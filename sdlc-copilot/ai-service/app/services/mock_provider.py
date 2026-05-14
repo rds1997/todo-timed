@@ -11,10 +11,10 @@ the orchestrator can fall back per-artifact when an individual OpenAI prompt fai
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from ..schemas import (
-    AnalyzeResponse, Ambiguity, ChatRequest, ChatResponse, DevTask, Epic,
+    AnalyzeResponse, Ambiguity, ChatMessage, ChatRequest, ChatResponse, DevTask, Epic,
     Estimation, Summary, TestCase, UserStory,
 )
 
@@ -195,14 +195,42 @@ def mock_analyze(title: str, text: str) -> AnalyzeResponse:
     )
 
 
-def mock_chat(req: ChatRequest) -> ChatResponse:
+def mock_chat(req: ChatRequest, history: Optional[List[ChatMessage]] = None) -> ChatResponse:
+    """Deterministic chat reply for demos without an OpenAI key.
+
+    When prior turns are supplied, the reply explicitly acknowledges the
+    conversation context so the demo demonstrates the conversation-memory
+    contract (history is shipped, considered, and reflected back) even
+    without a live LLM. The first message in a fresh chat falls back to a
+    grounded answer about the requirement itself.
+    """
+    effective_history = list(history) if history is not None else list(req.history)
     snippet = _first_sentence(req.text) or req.title
-    reply = (
-        f"Looking at \"{req.title}\", which describes: {snippet} — "
-        f"here's a quick answer to your question (\"{req.message.strip()[:120]}\"): "
-        "Based on the captured requirement, the most likely concern is that scope, "
-        "user persona, and acceptance criteria are not fully nailed down. I'd recommend "
-        "tightening those before deciding on architecture details. "
-        "(Mock reply — set OPENAI_API_KEY for live responses.)"
-    )
+    question = req.message.strip()[:120]
+
+    prior_user_turns = [m for m in effective_history if m.role == "user"]
+    last_user_turn = prior_user_turns[-1].content.strip() if prior_user_turns else None
+
+    if effective_history:
+        turn_count = len(effective_history)
+        if last_user_turn:
+            recap = f"earlier you asked: \"{last_user_turn[:120]}\""
+        else:
+            recap = "we already covered some context earlier in this thread"
+        reply = (
+            f"Picking up where we left off on \"{req.title}\" ({turn_count} prior turn(s) — {recap}). "
+            f"Now on your follow-up (\"{question}\"): the answer still hinges on the same "
+            f"requirement context — {snippet} The biggest open items remain scope, "
+            "user persona, and acceptance criteria. "
+            "(Mock reply — set OPENAI_API_KEY for live responses.)"
+        )
+    else:
+        reply = (
+            f"Looking at \"{req.title}\", which describes: {snippet} — "
+            f"here's a quick answer to your question (\"{question}\"): "
+            "Based on the captured requirement, the most likely concern is that scope, "
+            "user persona, and acceptance criteria are not fully nailed down. I'd recommend "
+            "tightening those before deciding on architecture details. "
+            "(Mock reply — set OPENAI_API_KEY for live responses.)"
+        )
     return ChatResponse(reply=reply, mode="mock")

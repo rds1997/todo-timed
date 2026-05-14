@@ -82,4 +82,5 @@ public record AiChatRequest(
 
 public record AiChatResponse(
     [property: JsonPropertyName("reply")] string Reply,
-    [property: JsonPropertyName("mode")] string Mode);
+    [property: JsonPropertyName("mode")] string Mode,
+    [property: JsonPropertyName("error")] string? Error = null);
