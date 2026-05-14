@@ -1,0 +1,23 @@
+Title: Customer Loyalty Program Portal
+
+We need to build a customer loyalty program portal for retail customers of our chain.
+Customers should be able to sign up online, accumulate points from their purchases
+(scanned at the POS or imported from e-commerce orders), redeem points for rewards
+from a curated catalog, and view their points balance and transaction history.
+
+Tier system: customers should be promoted between Bronze, Silver, and Gold tiers
+based on points earned in the last 12 months. Gold tier should unlock additional
+perks (free shipping, early access to sales).
+
+Admins should be able to:
+- Manage the rewards catalog (add, edit, retire rewards, set point cost)
+- View customer profiles and adjust points manually for service recovery cases
+- Run reports on enrollment, redemptions, and tier distribution
+
+Non-functional:
+- Support 100k customers in year one
+- Single-sign-on with the existing identity provider
+- Mobile-friendly UI
+- Data retention follows GDPR — customers can delete their account and have their
+  data removed within 30 days
+- All admin actions must be audited
