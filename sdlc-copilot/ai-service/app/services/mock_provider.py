@@ -2,11 +2,16 @@
 
 The mock is intentionally rich enough to populate every dashboard widget while still
 reflecting the input requirement (title + first sentence) so demos feel real.
+
+Each artifact has its own helper (``mock_summary``, ``mock_epics_and_stories``,
+``mock_tasks``, ``mock_test_cases``, ``mock_ambiguities``, ``mock_estimation``) so
+the orchestrator can fall back per-artifact when an individual OpenAI prompt fails.
+``mock_analyze`` remains the convenience entrypoint when the entire pipeline is mocked.
 """
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import List, Tuple
 
 from ..schemas import (
     AnalyzeResponse, Ambiguity, ChatRequest, ChatResponse, DevTask, Epic,
@@ -22,14 +27,26 @@ def _first_sentence(text: str) -> str:
     return parts[0].strip()[:160] if parts else text[:160]
 
 
-def mock_analyze(title: str, text: str) -> AnalyzeResponse:
+def mock_summary(title: str, text: str) -> Summary:
+    focus = _first_sentence(text) or title
+    return Summary(
+        summary=(
+            f"This requirement focuses on: {focus} The system needs an ingestion path, "
+            "async processing, history, exports, and basic auth/observability."
+        ),
+        goals="- Convert the described intent into a working flow\n- Provide a usable dashboard\n- Be deployable and observable",
+        stakeholders="- End users submitting input\n- Returning users reviewing history\n- Platform owners / admins\n- Ops engineers",
+        key_constraints="- Modern web stack (Angular + .NET + Python + Postgres)\n- Hackathon timeframe\n- Dockerized for portability\n- JWT-ready auth",
+    )
+
+
+def mock_epics_and_stories(title: str, text: str) -> Tuple[List[Epic], List[UserStory]]:
     focus = _first_sentence(text) or title
     epics = [
         Epic(title="Core Functionality", description=f"Deliver the primary capability: {focus}"),
         Epic(title="User Experience", description="Provide a clean, responsive interface end users can adopt quickly."),
         Epic(title="Operations & Security", description="Make the system observable, secure, and deployable."),
     ]
-
     stories: List[UserStory] = [
         UserStory(
             title="Capture primary input",
@@ -98,8 +115,11 @@ def mock_analyze(title: str, text: str) -> AnalyzeResponse:
             story_points=2, complexity="low", estimated_hours=4, epic_title="Operations & Security",
         ),
     ]
+    return epics, stories
 
-    tasks: List[DevTask] = [
+
+def mock_tasks() -> List[DevTask]:
+    return [
         DevTask(title="Design REST contract for submission", description="Document POST/GET endpoints with example payloads.", layer="backend", estimated_hours=4, complexity="low", story_title="Capture primary input"),
         DevTask(title="Implement submission endpoint", description="Validate, persist, and dispatch async processing.", layer="backend", estimated_hours=6, complexity="medium", story_title="Capture primary input"),
         DevTask(title="Build submission form UI", description="Material-styled form with inline validation.", layer="frontend", estimated_hours=6, complexity="medium", story_title="Capture primary input"),
@@ -116,7 +136,9 @@ def mock_analyze(title: str, text: str) -> AnalyzeResponse:
         DevTask(title="Seed sample data", description="Provide one demo-ready requirement.", layer="data", estimated_hours=2, complexity="low", story_title="Browse historical results"),
     ]
 
-    test_cases: List[TestCase] = [
+
+def mock_test_cases() -> List[TestCase]:
+    return [
         TestCase(title="Submit valid payload", kind="positive", preconditions="User is authenticated.", steps=["Fill all required fields", "Press Submit"], expected_result="Submission succeeds and appears in history.", story_title="Capture primary input"),
         TestCase(title="Submit empty payload", kind="negative", preconditions="User is authenticated.", steps=["Leave all fields empty", "Press Submit"], expected_result="Field-level errors are shown and request is not sent.", story_title="Capture primary input"),
         TestCase(title="Submit oversized payload", kind="edge", preconditions="User is authenticated.", steps=["Paste payload near the maximum allowed size", "Press Submit"], expected_result="System either accepts or rejects with a clear error; no 5xx.", story_title="Capture primary input"),
@@ -128,7 +150,10 @@ def mock_analyze(title: str, text: str) -> AnalyzeResponse:
         TestCase(title="Health endpoint healthy", kind="positive", preconditions="DB is reachable.", steps=["GET /health"], expected_result="Returns 200 with status=ok.", story_title="Operate the platform"),
     ]
 
-    ambiguities: List[Ambiguity] = [
+
+def mock_ambiguities(title: str, text: str) -> List[Ambiguity]:
+    focus = _first_sentence(text) or title
+    return [
         Ambiguity(excerpt=focus, issue="The user persona is not explicitly defined.", suggestion="Identify the primary persona(s) and their goals.", severity="medium", category="incomplete"),
         Ambiguity(excerpt="responsive modern UI", issue="No target devices or breakpoints specified.", suggestion="List supported viewports (e.g. >= 1024px desktop, 768-1023 tablet, < 768 mobile).", severity="low", category="unclear"),
         Ambiguity(excerpt="export support", issue="Export formats and scope are unclear.", suggestion="Specify which artifacts can be exported, and into which formats (JSON, MD, PDF...).", severity="medium", category="incomplete"),
@@ -136,29 +161,36 @@ def mock_analyze(title: str, text: str) -> AnalyzeResponse:
         Ambiguity(excerpt="conversational assistant", issue="Scope and memory of the assistant are not specified.", suggestion="Define whether the assistant has access to project history and tool calls.", severity="high", category="incomplete"),
     ]
 
-    total_points = sum(s.story_points for s in stories)
+
+def mock_estimation(stories: List[UserStory], tasks: List[DevTask]) -> Estimation:
+    """Deterministic rollup of story points and per-layer hours from the supplied artifacts."""
     breakdown = {"backend": 0.0, "frontend": 0.0, "infra": 0.0, "qa": 0.0, "data": 0.0}
     for t in tasks:
-        breakdown[t.layer] = round(breakdown.get(t.layer, 0.0) + t.estimated_hours, 2)
+        breakdown[t.layer] = round(breakdown.get(t.layer, 0.0) + (t.estimated_hours or 0), 2)
     total_hours = round(sum(breakdown.values()), 2)
+    if total_hours == 0:
+        total_hours = round(sum((s.estimated_hours or 0) for s in stories), 2)
+    return Estimation(
+        total_story_points=sum((s.story_points or 0) for s in stories),
+        total_estimated_hours=total_hours,
+        breakdown=breakdown,
+    )
 
+
+def mock_analyze(title: str, text: str) -> AnalyzeResponse:
+    """Build a complete mock AnalyzeResponse by composing the per-artifact helpers."""
+    epics, stories = mock_epics_and_stories(title, text)
+    tasks = mock_tasks()
+    test_cases = mock_test_cases()
+    ambiguities = mock_ambiguities(title, text)
     return AnalyzeResponse(
-        summary=Summary(
-            summary=f"This requirement focuses on: {focus} The system needs an ingestion path, async processing, history, exports, and basic auth/observability.",
-            goals="- Convert the described intent into a working flow\n- Provide a usable dashboard\n- Be deployable and observable",
-            stakeholders="- End users submitting input\n- Returning users reviewing history\n- Platform owners / admins\n- Ops engineers",
-            key_constraints="- Modern web stack (Angular + .NET + Python + Postgres)\n- Hackathon timeframe\n- Dockerized for portability\n- JWT-ready auth",
-        ),
+        summary=mock_summary(title, text),
         epics=epics,
         user_stories=stories,
         tasks=tasks,
         test_cases=test_cases,
         ambiguities=ambiguities,
-        estimation=Estimation(
-            total_story_points=total_points,
-            total_estimated_hours=total_hours,
-            breakdown=breakdown,
-        ),
+        estimation=mock_estimation(stories, tasks),
         mode="mock",
     )
 

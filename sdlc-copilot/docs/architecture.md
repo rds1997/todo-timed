@@ -52,7 +52,10 @@
   - `estimation` — total story points + per-layer hour breakdown
   - `chat` — grounded conversational replies
 - Calls are issued in three phases (summary+stories+ambiguity in parallel, then tasks+tests, then estimation) to keep latency low and cost bounded.
-- All prompts ask for **JSON-mode** responses validated against Pydantic models in `app/schemas.py`. Invalid LLM output triggers a recovery pass; any unhandled error falls back to the mock provider so the platform stays demo-able.
+- All prompts ask for **JSON-mode** responses validated against Pydantic models in `app/schemas.py`. If validation fails the call is retried (configurable via `OPENAI_SCHEMA_RETRY_ATTEMPTS`) with the validation error fed back into the user message so the model can self-correct.
+- **Per-artifact resilience**: each artifact is generated independently. If a single prompt still fails after retries — or the OpenAI SDK raises after its own transport-level retries (`OPENAI_MAX_RETRIES`) — only that artifact falls back to mock data. The rest of the analysis stays live.
+- Mode is reported by `/health` and on every `AnalyzeResponse`: `openai` when at least one live artifact succeeded, `mock` otherwise.
+- The live LLM defaults to `gpt-4o-mini`; override with `OPENAI_MODEL`. Azure OpenAI is supported by setting `OPENAI_BASE_URL` and `OPENAI_MODEL` to your deployment name.
 
 ## Database
 

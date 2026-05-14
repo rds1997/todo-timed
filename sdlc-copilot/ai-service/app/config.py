@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_base_url: str | None = None  # set for Azure OpenAI or local proxies
+    openai_organization: str | None = None  # optional OpenAI org id
     openai_temperature: float = 0.2
     openai_max_output_tokens: int = 4000
+    openai_timeout_seconds: float = 60.0
+    openai_max_retries: int = 2  # AsyncOpenAI client-level retries on transport errors / 429s
+    openai_schema_retry_attempts: int = 1  # extra attempts when LLM JSON fails Pydantic validation
 
     # Service
     service_name: str = "sdlc-copilot-ai"
@@ -30,3 +34,9 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings_for_tests() -> None:
+    """Test helper: drop the cached settings singleton so env-var changes take effect."""
+    global _settings
+    _settings = None
