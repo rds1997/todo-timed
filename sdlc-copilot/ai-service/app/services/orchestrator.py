@@ -112,7 +112,17 @@ class Orchestrator:
         window = max(0, self._settings.chat_history_window)
         bounded_history = req.history[-window:] if window else []
 
+        logger.info(
+            "chat invoked: title=%r message_len=%d history_provided=%d window=%d enabled=%s model=%s force_mock=%s",
+            req.title, len(req.message), len(req.history), window,
+            self._openai.enabled, self._openai.model, self._settings.force_mock,
+        )
+
         if not self._openai.enabled:
+            logger.info(
+                "chat: OpenAI disabled (api_key_set=%s force_mock=%s); using mock provider.",
+                bool(self._settings.openai_api_key), self._settings.force_mock,
+            )
             return mock_provider.mock_chat(req, history=bounded_history)
         try:
             user_msg = CHAT_USER_TEMPLATE.format(
@@ -122,14 +132,37 @@ class Orchestrator:
                 {"role": m.role, "content": m.content} for m in bounded_history
             ]
             logger.info(
-                "chat: %d prior turn(s) sent as context (window=%d, total_provided=%d)",
-                len(history_payload), window, len(req.history),
+                "chat: invoking OpenAI model=%s with %d prior turn(s) (window=%d, total_provided=%d)",
+                self._openai.model, len(history_payload), window, len(req.history),
             )
             reply = await self._openai.chat(CHAT_SYSTEM, history_payload, user_msg)
+            logger.info(
+                "chat: OpenAI returned %d-char reply (model=%s)",
+                len(reply), self._openai.model,
+            )
             return ChatResponse(reply=reply, mode="openai")
-        except Exception:
-            logger.exception("OpenAI chat failed, falling back to mock provider.")
-            return mock_provider.mock_chat(req, history=bounded_history)
+        except Exception as exc:
+            # IMPORTANT: when a key is configured the operator expects the live
+            # path to be taken. Previously we silently fell back to mock_chat,
+            # which made a live OpenAI failure look identical to no-key mode.
+            # Instead, surface the actual error so the caller can fix the root
+            # cause (bad key, model not available, network, quota, etc.).
+            err_type = type(exc).__name__
+            err_msg = str(exc) or repr(exc)
+            logger.exception(
+                "chat: OpenAI call FAILED (model=%s error_type=%s); surfacing error to caller.",
+                self._openai.model, err_type,
+            )
+            return ChatResponse(
+                reply=(
+                    f"[live OpenAI chat failed: {err_type}: {err_msg}] "
+                    "The AI service has a key configured (FORCE_MOCK=false) but the "
+                    "round-trip to OpenAI did not succeed. Check the ai-service logs "
+                    "and try `GET /health/openai` for a live probe."
+                ),
+                mode="error",
+                error=f"{err_type}: {err_msg}",
+            )
 
     # ---- per-artifact runners ---------------------------------------------
 

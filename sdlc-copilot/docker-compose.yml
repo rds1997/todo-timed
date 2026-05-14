@@ -19,6 +19,10 @@ services:
   ai-service:
     build:
       context: ./ai-service
+      args:
+        # Override on each build to verify a fresh image is running:
+        #   BUILD_ID=$(git rev-parse --short HEAD)-$(date +%s) docker compose build ai-service
+        BUILD_ID: ${BUILD_ID:-local}
     container_name: sdlc-ai
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

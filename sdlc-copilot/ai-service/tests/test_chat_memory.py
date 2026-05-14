@@ -153,10 +153,15 @@ async def test_orchestrator_caps_history_to_window() -> None:
     assert stub.last_history[-1]["content"] == "assistant msg 9"
 
 
-async def test_orchestrator_uses_history_aware_mock_on_openai_failure(
+async def test_orchestrator_surfaces_openai_error_in_live_mode(
     live_mode_settings: Settings,
 ) -> None:
-    """When OpenAI fails, the mock fallback still receives and reflects history."""
+    """When a key is configured and OpenAI fails, the actual error MUST be surfaced.
+
+    Regression guard: an earlier implementation silently fell back to ``mock_chat``
+    here, which made a real OpenAI failure indistinguishable from no-key mode and
+    led operators to think nothing was wrong with their key/config.
+    """
 
     class _FailingClient(OpenAIClient):
         @property
@@ -185,7 +190,11 @@ async def test_orchestrator_uses_history_aware_mock_on_openai_failure(
 
     response = await Orchestrator(live_mode_settings, failing).chat(req)
 
-    assert response.mode == "mock"
-    # The history-aware mock fallback acknowledges the prior turns.
-    assert "Picking up where we left off" in response.reply
-    assert "Earlier question about scope" in response.reply
+    # CRITICAL: mode is "error", NOT "mock" — silent fallback regression guard.
+    assert response.mode == "error"
+    assert response.error is not None
+    assert "RuntimeError" in response.error
+    assert "simulated OpenAI outage" in response.error
+    # The reply text must clearly indicate the live path failed (not the mock signature).
+    assert "live OpenAI chat failed" in response.reply
+    assert "Mock reply" not in response.reply

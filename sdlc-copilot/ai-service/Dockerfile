@@ -10,5 +10,10 @@ RUN pip install -r requirements.txt
 
 COPY app ./app
 
+# Stamped at build time and surfaced via GET /health so operators can confirm
+# the running container is the freshly-built image (rules out stale layer cache).
+ARG BUILD_ID=unset
+ENV BUILD_ID=${BUILD_ID}
+
 EXPOSE 8001
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -82,6 +82,22 @@ public class ChatService : IChatService
             return Result<ChatTurnResponse>.Failure("AI chat failed: " + ex.Message, 502);
         }
 
+        // Surface the upstream chat mode so operators can spot silent fallbacks.
+        // When the ai-service has a key but the live OpenAI round-trip failed it
+        // returns mode="error" with the actual error in aiResp.Error — log it loudly.
+        if (string.Equals(aiResp.Mode, "error", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(
+                "AI chat returned mode=error for requirement {Id}: {Error}",
+                requirementId, aiResp.Error);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "AI chat returned mode={Mode} for requirement {Id} (reply_len={Len})",
+                aiResp.Mode, requirementId, aiResp.Reply.Length);
+        }
+
         var assistantMsg = new ChatMessage
         {
             RequirementId = entity.Id,
