@@ -44,6 +44,7 @@ services:
       AiService__BaseUrl: http://ai-service:8001
       Cors__AllowedOrigins: "http://localhost:4200,http://localhost"
       EnableSwagger: "true"
+      EnableSqlLogging: ${EnableSqlLogging:-false}
     depends_on:
       postgres:
         condition: service_healthy

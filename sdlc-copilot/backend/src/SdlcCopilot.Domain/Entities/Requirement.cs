@@ -4,7 +4,7 @@ namespace SdlcCopilot.Domain.Entities;
 
 public class Requirement
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public string SourceText { get; set; } = string.Empty;
     public string? SourceFileName { get; set; }

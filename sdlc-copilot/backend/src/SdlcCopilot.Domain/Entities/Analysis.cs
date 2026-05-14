@@ -2,7 +2,7 @@ namespace SdlcCopilot.Domain.Entities;
 
 public class Analysis
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
     public Guid RequirementId { get; set; }
     public Requirement? Requirement { get; set; }
 

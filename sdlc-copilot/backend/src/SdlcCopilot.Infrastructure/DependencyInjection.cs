@@ -18,7 +18,15 @@ public static class DependencyInjection
             ?? configuration["ConnectionStrings__Default"]
             ?? "Host=localhost;Port=5432;Database=sdlc_copilot;Username=sdlc;Password=sdlc";
 
-        services.AddDbContext<AppDbContext>(opts => opts.UseNpgsql(connectionString));
+        services.AddDbContext<AppDbContext>(opts =>
+        {
+            opts.UseNpgsql(connectionString);
+            if (configuration.GetValue<bool>("EnableSqlLogging"))
+            {
+                opts.EnableSensitiveDataLogging();
+                opts.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
+            }
+        });
         services.AddScoped<IRequirementRepository, RequirementRepository>();
         services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
         services.AddScoped<IRequirementService, RequirementService>();
