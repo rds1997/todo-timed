@@ -54,4 +54,8 @@ export class RequirementService {
   exportJsonUrl(id: string): string {
     return `${this.base}/${id}/export.json`;
   }
+
+  exportCsvUrl(id: string): string {
+    return `${this.base}/${id}/export.csv`;
+  }
 }

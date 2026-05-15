@@ -5,7 +5,7 @@ Resilience model:
 - The orchestrator runs each artifact (summary, epics+stories, ambiguities, tasks,
   test cases, estimation) as an independent unit.
 - Each unit calls :class:`OpenAIClient.generate_json` and validates the raw JSON
-  against the appropriate Pydantic schema. If validation fails the call is retried
+  against the appropriate Pydantic schema.  If validation fails the call is retried
   up to ``openai_schema_retry_attempts`` times with the validation error fed back
   into the user message.
 - If a single artifact still fails after retries (or raises a transport / API error
@@ -44,23 +44,36 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# Maximum characters of requirement text forwarded to the LLM in chat requests.
+# Keeps prompt size bounded without an extra round-trip to count tokens.
+_MAX_CHAT_TEXT_CHARS: int = 6_000
+
 
 class Orchestrator:
-    """Runs the full SDLC analysis. Falls back to mock data per-artifact when live calls fail."""
+    """Runs the full SDLC analysis.  Falls back to mock data per-artifact when live calls fail."""
 
     def __init__(self, settings: Settings, openai_client: OpenAIClient | None = None):
         self._settings = settings
         self._openai = openai_client or OpenAIClient(settings)
 
+    @property
+    def openai_client(self) -> OpenAIClient:
+        """Expose the shared client so callers (e.g. the health endpoint) can reuse it."""
+        return self._openai
+
     # ---- public API --------------------------------------------------------
 
     async def analyze(self, req: AnalyzeRequest) -> AnalyzeResponse:
         if not self._openai.enabled:
-            logger.info("OpenAI disabled (no API key or force_mock=true); returning mock analysis.")
+            logger.info(
+                "analyze: OpenAI disabled (key_set=%s force_mock=%s); returning mock.",
+                bool(self._settings.openai_api_key),
+                self._settings.force_mock,
+            )
             return mock_provider.mock_analyze(req.title, req.text)
 
         logger.info(
-            "Starting live analyze with model=%s for title=%r (text_len=%d)",
+            "analyze: starting live run model=%s title=%r text_len=%d",
             self._openai.model, req.title, len(req.text),
         )
 
@@ -77,7 +90,7 @@ class Orchestrator:
         epics, stories = stories_result
         ambiguities = ambiguity_result
 
-        # Phase 2: tasks + tests in parallel (need stories from phase 1 for grounding).
+        # Phase 2: tasks + tests in parallel (grounded in stories from phase 1).
         stories_summary_json = json.dumps([
             {"title": s.title, "as_a": s.as_a, "i_want": s.i_want, "so_that": s.so_that}
             for s in stories
@@ -87,12 +100,12 @@ class Orchestrator:
             self._test_cases(req, stories_summary_json, succeeded, failed),
         )
 
-        # Phase 3: estimation (always have a deterministic rollup, optionally override with LLM).
+        # Phase 3: estimation (deterministic baseline, optionally refined by LLM).
         estimation = await self._estimation(stories, tasks, succeeded, failed)
 
         mode = "openai" if succeeded else "mock"
         logger.info(
-            "analyze complete: mode=%s succeeded=%s failed=%s",
+            "analyze: complete mode=%s succeeded=%s failed=%s",
             mode, succeeded, failed,
         )
         return AnalyzeResponse(
@@ -112,56 +125,53 @@ class Orchestrator:
         window = max(0, self._settings.chat_history_window)
         bounded_history = req.history[-window:] if window else []
 
-        logger.info(
-            "chat invoked: title=%r message_len=%d history_provided=%d window=%d enabled=%s model=%s force_mock=%s",
-            req.title, len(req.message), len(req.history), window,
-            self._openai.enabled, self._openai.model, self._settings.force_mock,
-        )
-
         if not self._openai.enabled:
-            logger.info(
-                "chat: OpenAI disabled (api_key_set=%s force_mock=%s); using mock provider.",
-                bool(self._settings.openai_api_key), self._settings.force_mock,
+            logger.debug(
+                "chat: OpenAI disabled (key_set=%s force_mock=%s); using mock.",
+                bool(self._settings.openai_api_key),
+                self._settings.force_mock,
             )
             return mock_provider.mock_chat(req, history=bounded_history)
+
+        logger.debug(
+            "chat: model=%s title=%r history=%d/%d window=%d msg_len=%d",
+            self._openai.model, req.title,
+            len(bounded_history), len(req.history), window,
+            len(req.message),
+        )
         try:
             user_msg = CHAT_USER_TEMPLATE.format(
-                title=req.title, text=req.text[:6000], message=req.message
+                title=req.title,
+                text=req.text[:_MAX_CHAT_TEXT_CHARS],
+                message=req.message,
             )
             history_payload: List[Dict[str, str]] = [
                 {"role": m.role, "content": m.content} for m in bounded_history
             ]
-            logger.info(
-                "chat: invoking OpenAI model=%s with %d prior turn(s) (window=%d, total_provided=%d)",
-                self._openai.model, len(history_payload), window, len(req.history),
-            )
             reply = await self._openai.chat(CHAT_SYSTEM, history_payload, user_msg)
-            logger.info(
-                "chat: OpenAI returned %d-char reply (model=%s)",
+            logger.debug(
+                "chat: OpenAI reply %d chars model=%s",
                 len(reply), self._openai.model,
             )
             return ChatResponse(reply=reply, mode="openai")
         except Exception as exc:
-            # IMPORTANT: when a key is configured the operator expects the live
-            # path to be taken. Previously we silently fell back to mock_chat,
-            # which made a live OpenAI failure look identical to no-key mode.
-            # Instead, surface the actual error so the caller can fix the root
-            # cause (bad key, model not available, network, quota, etc.).
             err_type = type(exc).__name__
-            err_msg = str(exc) or repr(exc)
-            logger.exception(
-                "chat: OpenAI call FAILED (model=%s error_type=%s); surfacing error to caller.",
-                self._openai.model, err_type,
+            err_detail = str(exc) or repr(exc)
+            friendly = self._openai.friendly_error(exc)
+            logger.warning(
+                "chat: OpenAI call failed model=%s error_type=%s — %s",
+                self._openai.model, err_type, friendly,
             )
+            # Log the full traceback at DEBUG so it doesn't clutter production logs
+            # but is still available when LOG_LEVEL=DEBUG.
+            logger.debug("chat: full exception", exc_info=exc)
             return ChatResponse(
                 reply=(
-                    f"[live OpenAI chat failed: {err_type}: {err_msg}] "
-                    "The AI service has a key configured (FORCE_MOCK=false) but the "
-                    "round-trip to OpenAI did not succeed. Check the ai-service logs "
-                    "and try `GET /health/openai` for a live probe."
+                    f"I'm unable to answer right now — {friendly}. "
+                    "Please try again in a moment."
                 ),
                 mode="error",
-                error=f"{err_type}: {err_msg}",
+                error=f"{err_type}: {err_detail}",
             )
 
     # ---- per-artifact runners ---------------------------------------------
@@ -296,7 +306,7 @@ class Orchestrator:
         succeeded: List[str],
         failed: List[str],
     ) -> Estimation:
-        # Deterministic baseline from the artifacts we already have.
+        # Deterministic baseline from artifacts we already have.
         deterministic = mock_provider.mock_estimation(stories, tasks)
 
         async def call(extra: List[Dict[str, str]] | None) -> Dict[str, Any]:
@@ -311,7 +321,6 @@ class Orchestrator:
 
         def parse(raw: Dict[str, Any]) -> Estimation:
             est = Estimation(**raw)
-            # Only trust the model when it produced a non-zero total.
             if est.total_estimated_hours <= 0 and est.total_story_points <= 0:
                 raise ValueError("estimation prompt returned a zero rollup")
             return est
@@ -344,7 +353,6 @@ class Orchestrator:
         for attempt in range(1, attempts + 1):
             extra: List[Dict[str, str]] | None = None
             if last_error_message is not None:
-                # Feed the previous validation error back so the model can self-correct.
                 extra = [{
                     "role": "user",
                     "content": (
@@ -358,7 +366,7 @@ class Orchestrator:
                 raw = await call(extra)
                 value = parse(raw)
                 if attempt > 1:
-                    logger.info("artifact %s recovered on attempt %d", name, attempt)
+                    logger.info("artifact %s recovered on attempt %d/%d", name, attempt, attempts)
                 else:
                     logger.debug("artifact %s succeeded on first attempt", name)
                 succeeded.append(name)
@@ -366,17 +374,19 @@ class Orchestrator:
             except (ValidationError, ValueError, json.JSONDecodeError) as ex:
                 last_error_message = str(ex)[:600]
                 logger.warning(
-                    "artifact %s validation failed on attempt %d/%d: %s",
+                    "artifact %s validation failed attempt %d/%d: %s",
                     name, attempt, attempts, last_error_message,
                 )
             except Exception as ex:
-                # Transport / API error from the OpenAI SDK after its own retries are exhausted.
-                logger.exception(
-                    "artifact %s OpenAI call failed on attempt %d/%d: %s",
-                    name, attempt, attempts, ex,
+                # Transport / API error — the OpenAI SDK already exhausted its own retries.
+                friendly = OpenAIClient.friendly_error(ex)
+                logger.warning(
+                    "artifact %s transport error attempt %d/%d: %s",
+                    name, attempt, attempts, friendly,
                 )
-                break
+                logger.debug("artifact %s full exception", name, exc_info=ex)
+                break  # no point retrying a transport error with a correction message
 
-        logger.warning("artifact %s falling back to mock data", name)
+        logger.warning("artifact %s: all attempts failed, using mock fallback", name)
         failed.append(name)
         return fallback()

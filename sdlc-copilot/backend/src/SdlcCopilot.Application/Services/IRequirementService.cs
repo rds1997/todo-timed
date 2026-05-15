@@ -19,4 +19,5 @@ public interface IRequirementService
 
     Task<Result<string>> ExportMarkdownAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<string>> ExportJsonAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Result<string>> ExportCsvAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -232,6 +232,124 @@ public class RequirementService : IRequirementService
         return Result<string>.Success(json);
     }
 
+    public async Task<Result<string>> ExportCsvAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _repo.GetWithChildrenAsync(id, tracking: false, cancellationToken);
+        if (entity is null) return Result<string>.NotFound();
+        var dto = Mapper.ToDetailDto(entity);
+
+        var sb = new StringBuilder();
+        // Jira-compatible CSV header
+        sb.AppendLine("Issue Type,Epic,Summary,Description,Story Points,Estimated Hours,Layer,Complexity,Acceptance Criteria");
+
+        // Epics
+        foreach (var epic in dto.Epics)
+        {
+            sb.AppendLine(string.Join(",", new[]
+            {
+                CsvEscape("Epic"),
+                CsvEscape(""),
+                CsvEscape(epic.Title),
+                CsvEscape(epic.Description),
+                "", "", "", "", ""
+            }));
+
+            // Stories under this epic
+            foreach (var story in dto.UserStories.Where(s => s.EpicId == epic.Id))
+            {
+                var description = $"As a {story.AsA}, I want {story.IWant}, so that {story.SoThat}.";
+                var ac = string.Join(" | ", story.AcceptanceCriteria);
+                sb.AppendLine(string.Join(",", new[]
+                {
+                    CsvEscape("Story"),
+                    CsvEscape(epic.Title),
+                    CsvEscape(story.Title),
+                    CsvEscape(description),
+                    story.StoryPoints.ToString(),
+                    story.EstimatedHours.ToString("F1"),
+                    "", CsvEscape(story.Complexity.ToString()),
+                    CsvEscape(ac)
+                }));
+
+                // Tasks linked to this story
+                foreach (var task in dto.Tasks.Where(t => t.UserStoryId == story.Id))
+                {
+                    sb.AppendLine(string.Join(",", new[]
+                    {
+                        CsvEscape("Sub-task"),
+                        CsvEscape(epic.Title),
+                        CsvEscape(task.Title),
+                        CsvEscape(task.Description),
+                        "", task.EstimatedHours.ToString("F1"),
+                        CsvEscape(task.Layer),
+                        CsvEscape(task.Complexity.ToString()),
+                        ""
+                    }));
+                }
+            }
+        }
+
+        // Orphan stories (no epic)
+        foreach (var story in dto.UserStories.Where(s => s.EpicId is null))
+        {
+            var description = $"As a {story.AsA}, I want {story.IWant}, so that {story.SoThat}.";
+            var ac = string.Join(" | ", story.AcceptanceCriteria);
+            sb.AppendLine(string.Join(",", new[]
+            {
+                CsvEscape("Story"),
+                CsvEscape(""),
+                CsvEscape(story.Title),
+                CsvEscape(description),
+                story.StoryPoints.ToString(),
+                story.EstimatedHours.ToString("F1"),
+                "", CsvEscape(story.Complexity.ToString()),
+                CsvEscape(ac)
+            }));
+
+            foreach (var task in dto.Tasks.Where(t => t.UserStoryId == story.Id))
+            {
+                sb.AppendLine(string.Join(",", new[]
+                {
+                    CsvEscape("Sub-task"),
+                    CsvEscape(""),
+                    CsvEscape(task.Title),
+                    CsvEscape(task.Description),
+                    "", task.EstimatedHours.ToString("F1"),
+                    CsvEscape(task.Layer),
+                    CsvEscape(task.Complexity.ToString()),
+                    ""
+                }));
+            }
+        }
+
+        // Unlinked tasks (no user story)
+        foreach (var task in dto.Tasks.Where(t => t.UserStoryId is null))
+        {
+            sb.AppendLine(string.Join(",", new[]
+            {
+                CsvEscape("Sub-task"),
+                CsvEscape(""),
+                CsvEscape(task.Title),
+                CsvEscape(task.Description),
+                "", task.EstimatedHours.ToString("F1"),
+                CsvEscape(task.Layer),
+                CsvEscape(task.Complexity.ToString()),
+                ""
+            }));
+        }
+
+        return Result<string>.Success(sb.ToString());
+    }
+
+    private static string CsvEscape(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        // Wrap in quotes if the value contains a comma, quote, or newline
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+
     private static void ApplyAiResponse(Requirement entity, AiAnalyzeResponse ai)
     {
         // Replace previous analysis & children

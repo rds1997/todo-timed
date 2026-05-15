@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: sdlc-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sdlc}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sdlc}
@@ -24,18 +25,23 @@ services:
         #   BUILD_ID=$(git rev-parse --short HEAD)-$(date +%s) docker compose build ai-service
         BUILD_ID: ${BUILD_ID:-local}
     container_name: sdlc-ai
+    restart: unless-stopped
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      OPENAI_ORGANIZATION: ${OPENAI_ORGANIZATION:-}
+      # OPENAI_BASE_URL is intentionally omitted here.
+      # Set it in your .env only when using Azure OpenAI or a local proxy:
+      #   OPENAI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment>
+      # Injecting an empty string (via ${OPENAI_BASE_URL:-}) causes
+      # httpx.UnsupportedProtocol because the OpenAI SDK reads this variable
+      # when base_url is not passed explicitly to AsyncOpenAI().
       OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-4000}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
       OPENAI_MAX_RETRIES: ${OPENAI_MAX_RETRIES:-2}
       OPENAI_SCHEMA_RETRY_ATTEMPTS: ${OPENAI_SCHEMA_RETRY_ATTEMPTS:-1}
       CHAT_HISTORY_WINDOW: ${CHAT_HISTORY_WINDOW:-20}
-      LOG_LEVEL: INFO
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       FORCE_MOCK: ${FORCE_MOCK:-false}
     ports:
       - "8001:8001"
@@ -49,6 +55,7 @@ services:
     build:
       context: ./backend
     container_name: sdlc-api
+    restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
@@ -61,7 +68,7 @@ services:
       postgres:
         condition: service_healthy
       ai-service:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8080:8080"
 
@@ -69,6 +76,7 @@ services:
     build:
       context: ./frontend
     container_name: sdlc-frontend
+    restart: unless-stopped
     depends_on:
       - api
     ports:

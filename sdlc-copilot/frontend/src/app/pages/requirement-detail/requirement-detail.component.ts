@@ -57,6 +57,9 @@ import {
         <a mat-stroked-button [href]="jsonUrl" target="_blank" rel="noopener">
           <mat-icon>data_object</mat-icon> Export JSON
         </a>
+        <a mat-stroked-button [href]="csvUrl" target="_blank" rel="noopener" matTooltip="Jira-compatible CSV">
+          <mat-icon>table_chart</mat-icon> Export CSV
+        </a>
       </div>
 
       <mat-progress-bar *ngIf="analyzing" mode="indeterminate"></mat-progress-bar>
@@ -247,6 +250,114 @@ import {
           </div>
         </mat-tab>
 
+        <mat-tab label="Estimation">
+          <div class="tab-pad">
+            <div *ngIf="detail.estimation.totalStoryPoints > 0 || detail.estimation.totalEstimatedHours > 0; else noEstimation">
+
+              <!-- Summary cards -->
+              <div class="est-summary-grid">
+                <div class="est-hero-card mat-elevation-z2">
+                  <span class="est-hero-label">Total Story Points</span>
+                  <span class="est-hero-value">{{ detail.estimation.totalStoryPoints }}</span>
+                  <span class="est-hero-sub">across {{ detail.estimation.storyCount }} user stories</span>
+                </div>
+                <div class="est-hero-card mat-elevation-z2">
+                  <span class="est-hero-label">Total Estimated Hours</span>
+                  <span class="est-hero-value">{{ detail.estimation.totalEstimatedHours }}h</span>
+                  <span class="est-hero-sub">{{ detail.estimation.taskCount }} tasks in scope</span>
+                </div>
+              </div>
+
+              <!-- Layer breakdown -->
+              <mat-card style="margin-top: 20px">
+                <mat-card-header>
+                  <mat-card-title><mat-icon>bar_chart</mat-icon>&nbsp;Effort by Layer</mat-card-title>
+                  <mat-card-subtitle>Hours allocated per engineering discipline</mat-card-subtitle>
+                </mat-card-header>
+                <mat-card-content>
+                  <div class="layer-bars">
+                    <div class="layer-bar-row">
+                      <span class="layer-bar-label pill layer-Backend">Backend</span>
+                      <mat-progress-bar
+                        mode="determinate"
+                        [value]="layerPercent(detail.estimation.backendHours)"
+                        color="primary"
+                        class="layer-progress">
+                      </mat-progress-bar>
+                      <span class="layer-bar-hours">{{ detail.estimation.backendHours }}h</span>
+                    </div>
+                    <div class="layer-bar-row">
+                      <span class="layer-bar-label pill layer-Frontend">Frontend</span>
+                      <mat-progress-bar
+                        mode="determinate"
+                        [value]="layerPercent(detail.estimation.frontendHours)"
+                        color="accent"
+                        class="layer-progress">
+                      </mat-progress-bar>
+                      <span class="layer-bar-hours">{{ detail.estimation.frontendHours }}h</span>
+                    </div>
+                    <div class="layer-bar-row">
+                      <span class="layer-bar-label pill layer-QA">QA</span>
+                      <mat-progress-bar
+                        mode="determinate"
+                        [value]="layerPercent(detail.estimation.qaHours)"
+                        color="warn"
+                        class="layer-progress">
+                      </mat-progress-bar>
+                      <span class="layer-bar-hours">{{ detail.estimation.qaHours }}h</span>
+                    </div>
+                    <div class="layer-bar-row">
+                      <span class="layer-bar-label pill layer-Infra">Infra</span>
+                      <mat-progress-bar
+                        mode="determinate"
+                        [value]="layerPercent(detail.estimation.infraHours)"
+                        class="layer-progress">
+                      </mat-progress-bar>
+                      <span class="layer-bar-hours">{{ detail.estimation.infraHours }}h</span>
+                    </div>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+
+              <!-- Per-story breakdown table -->
+              <mat-card style="margin-top: 16px" *ngIf="detail.userStories.length">
+                <mat-card-header>
+                  <mat-card-title><mat-icon>format_list_numbered</mat-icon>&nbsp;Story Points Breakdown</mat-card-title>
+                </mat-card-header>
+                <mat-card-content>
+                  <table mat-table [dataSource]="detail.userStories" class="full-w">
+                    <ng-container matColumnDef="title">
+                      <th mat-header-cell *matHeaderCellDef>User Story</th>
+                      <td mat-cell *matCellDef="let s">{{ s.title }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="points">
+                      <th mat-header-cell *matHeaderCellDef>SP</th>
+                      <td mat-cell *matCellDef="let s"><strong>{{ s.storyPoints }}</strong></td>
+                    </ng-container>
+                    <ng-container matColumnDef="hours">
+                      <th mat-header-cell *matHeaderCellDef>Hours</th>
+                      <td mat-cell *matCellDef="let s">{{ s.estimatedHours }}h</td>
+                    </ng-container>
+                    <ng-container matColumnDef="complexity">
+                      <th mat-header-cell *matHeaderCellDef>Complexity</th>
+                      <td mat-cell *matCellDef="let s">{{ complexityLabel(s.complexity) }}</td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="storyCols"></tr>
+                    <tr mat-row *matRowDef="let row; columns: storyCols;"></tr>
+                  </table>
+                </mat-card-content>
+              </mat-card>
+
+            </div>
+            <ng-template #noEstimation>
+              <div class="empty-state">
+                <mat-icon>show_chart</mat-icon>
+                <p>No estimation data yet. Click <strong>Analyze with AI</strong> to generate estimates.</p>
+              </div>
+            </ng-template>
+          </div>
+        </mat-tab>
+
         <mat-tab label="Assistant">
           <div class="tab-pad">
             <app-chat-panel [requirementId]="detail.id"></app-chat-panel>
@@ -276,6 +387,22 @@ import {
       display: inline-block; padding: 2px 10px; border-radius: 999px;
       font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
     }
+    /* Estimation tab */
+    .est-summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;
+    }
+    .est-hero-card {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px; border-radius: 12px; background: #f3f4ff; text-align: center;
+    }
+    .est-hero-label { font-size: 0.8rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+    .est-hero-value { font-size: 2.6rem; font-weight: 700; color: #3f3f7a; line-height: 1.1; margin: 4px 0; }
+    .est-hero-sub   { font-size: 0.78rem; color: #888; }
+    .layer-bars { display: flex; flex-direction: column; gap: 14px; padding: 8px 0; }
+    .layer-bar-row { display: flex; align-items: center; gap: 12px; }
+    .layer-bar-label { min-width: 84px; text-align: center; }
+    .layer-progress { flex: 1; height: 10px; border-radius: 6px; }
+    .layer-bar-hours { min-width: 52px; text-align: right; font-weight: 600; font-size: 0.9rem; }
   `],
 })
 export class RequirementDetailComponent implements OnInit {
@@ -289,9 +416,18 @@ export class RequirementDetailComponent implements OnInit {
   detail: RequirementDetail | null = null;
   analyzing = false;
   taskCols = ['title', 'layer', 'hours', 'complexity'];
+  storyCols = ['title', 'points', 'hours', 'complexity'];
 
   get mdUrl(): string { return this.service.exportMarkdownUrl(this.id); }
   get jsonUrl(): string { return this.service.exportJsonUrl(this.id); }
+  get csvUrl(): string { return this.service.exportCsvUrl(this.id); }
+
+  /** Returns what percentage of total hours a given layer's hours represent (for progress bars). */
+  layerPercent(hours: number): number {
+    const total = this.detail?.estimation.totalEstimatedHours ?? 0;
+    if (!total) return 0;
+    return Math.round((hours / total) * 100);
+  }
 
   get orphanStories() {
     if (!this.detail) return [];

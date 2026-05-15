@@ -105,6 +105,15 @@ public class RequirementsController : ControllerBase
         return File(System.Text.Encoding.UTF8.GetBytes(result.Value!), "application/json", $"requirement-{id}.json");
     }
 
+    [HttpGet("{id:guid}/export.csv")]
+    [Produces("text/csv")]
+    public async Task<IActionResult> ExportCsv(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _service.ExportCsvAsync(id, cancellationToken);
+        if (!result.IsSuccess) return NotFound(new { error = result.Error });
+        return File(System.Text.Encoding.UTF8.GetBytes(result.Value!), "text/csv", $"requirement-{id}.csv");
+    }
+
     private ActionResult<T> Map<T>(Result<T> result)
     {
         if (result.IsSuccess) return Ok(result.Value);
